@@ -33,8 +33,10 @@ local function get_key(cfg, name)
 
 	if cfg.platform then
 		return name .. "_" .. cfg.buildcfg .. "_" .. cfg.platform
-	else
+	elseif cfg.buildcfg ~= "default" then
 		return name .. "_" .. cfg.buildcfg
+	else
+		return name
 	end
 end
 
@@ -148,7 +150,6 @@ function ninja.generateWorkspace(wks)
 	local cfgs = {} -- key is concatenated name or variant name, value is string of outputs names
 	local key = ""
 	local cfg_first = nil
-	local cfg_first_lib = nil
 
 	for prj in p.workspace.eachproject(wks) do
 		if p.action.supports(prj.kind) and prj.kind ~= p.NONE then
@@ -159,14 +160,8 @@ function ninja.generateWorkspace(wks)
 				table.insert(cfgs[cfg.buildcfg], key)
 
 				-- set first configuration name
-				if (cfg_first == nil) and (cfg.kind == p.CONSOLEAPP or cfg.kind == p.WINDOWEDAPP) then
-					cfg_first = key
-				end
-				if (cfg_first_lib == nil) and (cfg.kind == p.STATICLIB or cfg.kind == p.SHAREDLIB) then
-					cfg_first_lib = key
-				end
-				if prj.name == wks.startproject then
-					cfg_first = key
+				if cfg_first == nil then
+					cfg_first = cfg.buildcfg
 				end
 
 				-- include other ninja file
@@ -174,8 +169,6 @@ function ninja.generateWorkspace(wks)
 			end
 		end
 	end
-
-	if cfg_first == nil then cfg_first = cfg_first_lib end
 
 	p.outln("")
 
@@ -220,7 +213,7 @@ local function getFileDependencies(cfg)
 		dependencies = {"prebuild_" .. get_key(cfg)}
 	end
 	for i = 1, #cfg.dependson do
-		table.insert(dependencies, cfg.dependson[i] .. "_" .. cfg.buildcfg)
+		table.insert(dependencies, get_key(cfg, cfg.dependson[i]))
 	end
 	return dependencies
 end
@@ -327,7 +320,7 @@ local function compilation_rules(cfg, toolset, pch)
 	local cxx = toolset.gettoolname(cfg, "cxx")
 	local ar = toolset.gettoolname(cfg, "ar")
 	local link = toolset.gettoolname(cfg, iif(cfg.language == "C", "cc", "cxx"))
-	local rc = toolset.gettoolname(cfg, "rc")
+	local rc = toolset.gettoolname(cfg, "rc") or "windres"
 
 	local all_cflags = getcflags(toolset, cfg, cfg)
 	local all_cxxflags = getcxxflags(toolset, cfg, cfg)
@@ -363,7 +356,7 @@ local function compilation_rules(cfg, toolset, pch)
 			p.outln("  description = link $out")
 			p.outln("")
 		end
-	elseif toolset == p.tools.clang or toolset == p.tools.gcc then
+	else -- if toolset == p.tools.clang or toolset == p.tools.gcc then
 		local force_include_pch = ""
 		if pch then
 			force_include_pch = " -include " .. ninja.shesc(pch.placeholder)
@@ -382,7 +375,7 @@ local function compilation_rules(cfg, toolset, pch)
 		p.outln("")
 		p.outln("CXXFLAGS=" .. all_cxxflags)
 		p.outln("rule cxx")
-		p.outln("  command = " .. cxx .. " $CXXFLAGS" .. force_include_pch .. " -x c++ -MF $out.d -c -o $out $in")
+		p.outln("  command = " .. cxx .. " $CXXFLAGS" .. force_include_pch .. " -MF $out.d -c -o $out $in")
 		p.outln("  description = cxx $out")
 		p.outln("  depfile = $out.d")
 		p.outln("  deps = gcc")
@@ -661,7 +654,9 @@ function ninja.generateProjectCfg(cfg)
 	if #cfg.postbuildcommands > 0 or cfg.postbuildmessage then
 		add_build(cfg, key, {}, "phony", {"postbuild_" .. get_key(cfg)}, {}, {}, {})
 	else
-		add_build(cfg, key, {}, "phony", {cfg_output}, {}, {}, {})
+		if cfg_output ~= './' .. key then
+			add_build(cfg, key, {}, "phony", {cfg_output}, {}, {}, {})
+		end
 	end
 	p.outln("")
 
