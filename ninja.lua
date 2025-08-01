@@ -368,7 +368,7 @@ local function compilation_rules(cfg, toolset, pch)
 		end
 		p.outln("CFLAGS=" .. all_cflags)
 		p.outln("rule cc")
-		p.outln("  command = " .. cc .. " $CFLAGS" .. force_include_pch .. " -x c -MF $out.d -c -o $out $in")
+		p.outln("  command = " .. cc .. " $CFLAGS" .. force_include_pch .. " -MF $out.d -c -o $out $in")
 		p.outln("  description = cc $out")
 		p.outln("  depfile = $out.d")
 		p.outln("  deps = gcc")
