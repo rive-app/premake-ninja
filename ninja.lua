@@ -357,43 +357,59 @@ local function compilation_rules(cfg, toolset, pch)
 			p.outln("")
 		end
 	else -- if toolset == p.tools.clang or toolset == p.tools.gcc then
+        local function is_windows()
+            -- package.config:sub(1,1) returns the directory separator
+            -- On Windows, it's usually '\\'
+            return package.config:sub(1,1) == '\\'
+        end
+
+        local function make_build_command(command, indent)
+            indent = indent or "  "
+            if is_windows() then
+                -- Invoke from bash on windows.
+                return indent .. 'command = bash -c "' .. command .. '"'
+            else
+                return indent .. 'command = ' .. command
+            end
+        end
+
 		local force_include_pch = ""
 		if pch then
 			force_include_pch = " -include " .. ninja.shesc(pch.placeholder)
 			p.outln("rule build_pch")
-			p.outln("  command = " .. iif(cfg.language == "C", cc .. all_cflags .. " -x c-header", cxx .. all_cxxflags .. " -x c++-header")  .. " -H -MF $out.d -c -o $out $in")
+			p.outln(make_build_command(iif(cfg.language == "C", cc .. all_cflags .. " -x c-header", cxx .. all_cxxflags .. " -x c++-header")  .. " -H -MF $out.d -c -o $out $in"))
 			p.outln("  description = build_pch $out")
 			p.outln("  depfile = $out.d")
 			p.outln("  deps = gcc")
 		end
 		p.outln("CFLAGS=" .. all_cflags)
 		p.outln("rule cc")
-		p.outln("  command = " .. cc .. " $CFLAGS" .. force_include_pch .. " -MF $out.d -c -o $out $in")
+		p.outln(make_build_command(cc .. " $CFLAGS" .. force_include_pch .. " -MF $out.d -c -o $out $in"))
 		p.outln("  description = cc $out")
 		p.outln("  depfile = $out.d")
 		p.outln("  deps = gcc")
 		p.outln("")
 		p.outln("CXXFLAGS=" .. all_cxxflags)
 		p.outln("rule cxx")
-		p.outln("  command = " .. cxx .. " $CXXFLAGS" .. force_include_pch .. " -MF $out.d -c -o $out $in")
+		p.outln(make_build_command(cxx .. " $CXXFLAGS" .. force_include_pch .. " -MF $out.d -c -o $out $in"))
 		p.outln("  description = cxx $out")
 		p.outln("  depfile = $out.d")
 		p.outln("  deps = gcc")
 		p.outln("")
 		p.outln("RESFLAGS = " .. all_resflags)
 		p.outln("rule rc")
-		p.outln("  command = " .. rc .. " -i $in -o $out $RESFLAGS")
+		p.outln(make_build_command(rc .. " -i $in -o $out $RESFLAGS"))
 		p.outln("  description = rc $out")
 		p.outln("")
 		if cfg.kind == p.STATICLIB then
 			p.outln("rule ar")
-			p.outln("  command = " .. ar .. " rcs $out $in")
+			p.outln(make_build_command(ar .. " rcs $out $in"))
 			p.outln("  description = ar $out")
 			p.outln("")
 		else
 			local groups = iif(cfg.linkgroups == premake.ON, {"-Wl,--start-group ", " -Wl,--end-group"}, {"", ""})
 			p.outln("rule link")
-			p.outln("  command = " .. link .. " -o $out " .. groups[1] .. "$in" .. ninja.list(ninja.shesc(toolset.getlinks(cfg, true, true))) .. all_ldflags .. groups[2])
+			p.outln(make_build_command(link .. " -o $out " .. groups[1] .. "$in" .. ninja.list(ninja.shesc(toolset.getlinks(cfg, true, true))) .. all_ldflags .. groups[2]))
 			p.outln("  description = link $out")
 			p.outln("")
 		end
