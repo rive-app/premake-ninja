@@ -641,7 +641,11 @@ function ninja.generateProjectCfg(cfg)
 	elseif cfg.kind == p.SHAREDLIB then
 		p.outln("# link shared lib")
 		command_rule = "link"
-		extra_outputs = iif(os.target() == "windows", {path.replaceextension(cfg_output, ".lib"), path.replaceextension(cfg_output, ".exp")}, {})
+		-- These are MSVC import-library outputs. Gate on the *target* system,
+		-- not os.target() (the host): cross-compiling to Android from Windows
+		-- declared a .lib/.exp that the NDK linker never writes, so ninja saw a
+		-- missing output and relinked every shared lib on every build.
+		extra_outputs = iif(cfg.system == "windows", {path.replaceextension(cfg_output, ".lib"), path.replaceextension(cfg_output, ".exp")}, {})
 	elseif (cfg.kind == p.CONSOLEAPP) or (cfg.kind == p.WINDOWEDAPP) then
 		p.outln("# link executable")
 		command_rule = "link"
