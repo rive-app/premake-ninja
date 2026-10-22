@@ -314,6 +314,20 @@ local function postbuild_rule(cfg)
 	end
 end
 
+-- A big library's object list can pass the 32K character command line limit on Windows.
+local function ar_rule(command)
+	p.outln("rule ar")
+	if os.host() == "windows" then
+		p.outln("  command = " .. command:gsub("%$in", "@$out.rsp"))
+		p.outln("  rspfile = $out.rsp")
+		p.outln("  rspfile_content = $in")
+	else
+		p.outln("  command = " .. command)
+	end
+	p.outln("  description = ar $out")
+	p.outln("")
+end
+
 local function compilation_rules(cfg, toolset, pch)
 	---------------------------------------------------- figure out toolset executables
 	local cc = toolset.gettoolname(cfg, "cc")
@@ -346,10 +360,7 @@ local function compilation_rules(cfg, toolset, pch)
 		p.outln("  description = rc $out")
 		p.outln("")
 		if cfg.kind == p.STATICLIB then
-			p.outln("rule ar")
-			p.outln("  command = " .. ar .. " $in /nologo -OUT:$out")
-			p.outln("  description = ar $out")
-			p.outln("")
+			ar_rule(ar .. " $in /nologo -OUT:$out")
 		else
 			p.outln("rule link")
 			p.outln("  command = " .. link .. " $in" .. ninja.list(ninja.shesc(toolset.getlinks(cfg, true))) .. " /link" .. all_ldflags .. " /nologo /out:$out")
@@ -386,10 +397,7 @@ local function compilation_rules(cfg, toolset, pch)
 		p.outln("  description = rc $out")
 		p.outln("")
 		if cfg.kind == p.STATICLIB then
-			p.outln("rule ar")
-			p.outln("  command = " .. ar .. " rcs $out $in")
-			p.outln("  description = ar $out")
-			p.outln("")
+			ar_rule(ar .. " rcs $out $in")
 		else
 			local groups = iif(cfg.linkgroups == premake.ON, {"-Wl,--start-group ", " -Wl,--end-group"}, {"", ""})
 			p.outln("rule link")
